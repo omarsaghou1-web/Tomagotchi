@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<title>Tamagotchi Prototype</title>
+
+<style>
+body { margin: 0; overflow: hidden; background:#f0f0f0; font-family:sans-serif; }
+canvas { display:block; }
+
+#gui {
+    position:absolute;
+    top:20px;
+    left:50%;
+    transform:translateX(-50%);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:15px;
+    z-index:100;
+    pointer-events:none;
+    width:100%;
+}
+
+.ui-Container {
+    display:flex;
+    gap:10px;
+    pointer-events:auto;
+}
+
+.game-button {
+    padding:10px 20px;
+    font-weight:bold;
+    cursor:pointer;
+    background:#ffde00;
+    border:3px solid #333;
+    border-radius:12px;
+    box-shadow:3px 3px 0 #333;
+}
+
+.game-button:active {
+    transform:translate(2px,2px);
+    box-shadow:none;
+}
+
+.footer {
+    display:flex;
+    gap:30px;
+    background:rgba(255,255,255,0.6);
+    padding:8px 20px;
+    border-radius:20px;
+    pointer-events:auto;
+}
+
+.footer p {
+    margin:0;
+    font-size:18px;
+    font-weight:bold;
+}
+</style>
+</head>
+
+<body>
+
+<div id="gui">
+    <div class="ui-Container">
+        <button class="game-button" onclick="Voeren()">Feeding 🍎</button>
+        <button class="game-button" onclick="Dansen()">Dancing 💃</button>
+        <button class="game-button" onclick="Slapen()">Sleeping 💤</button>
+    </div>
+
+    <footer class="footer">
+        <p id="stat-honger">Hunger: 100</p>
+        <p id="stat-slaap">Sleep: 100</p>
+        <p id="stat-lol">Fun: 100</p>
+    </footer>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87CEEB); 
+
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 1, 3); 
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+const dirLight = new THREE.DirectionalLight(0xffffff, 2);
+dirLight.position.set(5, 5, 5);
+scene.add(dirLight);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+
+let tamagotchi, turkey;
+let isDansen = false;
+let isSlapen = false;
+
+let stats = { honger: 100, slaap: 100, lol: 100 };
+
+const eatAudio = new Audio('HelloBiden.mp3');
+const danceAudio = new Audio('Bluebird.mp3');
+const sleepAudio = new Audio('Snoring Sounds.mp3');
+
+
+const loader = new GLTFLoader();
+
+loader.load('Zelen.glb', (gltf) => {
+    tamagotchi = gltf.scene;
+    tamagotchi.scale.set(1.5, 1.5, 1.5); 
+    
+    const box = new THREE.Box3().setFromObject(tamagotchi);
+    const center = box.getCenter(new THREE.Vector3());
+    tamagotchi.position.x = -center.x;
+    tamagotchi.position.y = -center.y;
+    tamagotchi.position.z = -center.z;
+    
+    scene.add(tamagotchi);
+}, undefined, (error) => {
+    console.error("Fout bij laden model:", error);
+});
+
+loader.load('FPV Drone.glb', gltf => {
+    turkey = gltf.scene;
+    turkey.scale.set(0.5, 0.5, 0.5);
+    turkey.position.set(1, 1, 0);
+    turkey.visible = false;
+    scene.add(turkey);
+});
+
+
+function UpdateStats() {
+    document.getElementById('stat-honger').innerText = "Hunger: " + Math.round(stats.honger);
+    document.getElementById('stat-slaap').innerText = "Sleep: " + Math.round(stats.slaap);
+    document.getElementById('stat-lol').innerText = "Fun: " + Math.round(stats.lol);
+}
+
+setInterval(() => {
+    if (!isSlapen) stats.slaap -= 1;
+    stats.honger -= 0.8;
+    stats.lol -= 0.5;
+    UpdateStats();
+    if (stats.honger <= 0 || stats.slaap <= 0 || stats.lol <= 0) {
+        alert("Game Over! Zelensky is niet blij.");
+        location.reload();
+    }
+}, 3000);
+
+window.Voeren = () => {
+    if (turkey) {
+        turkey.visible = true;
+        setTimeout(() => turkey.visible = false, 2000);
+    }
+    eatAudio.play();
+    stats.honger = Math.min(100, stats.honger + 20);
+    UpdateStats();
+};
+
+window.Dansen = () => {
+    if (isDansen) return;
+    isDansen = true;
+    danceAudio.play();
+    stats.lol = Math.min(100, stats.lol + 15);
+    UpdateStats();
+    setTimeout(() => { 
+        isDansen = false; 
+        danceAudio.pause(); 
+        danceAudio.currentTime = 0; 
+        if(tamagotchi) tamagotchi.rotation.y = 0; // Recht na dansen 
+    }, 4000);
+};
+
+window.Slapen = () => {
+    isSlapen = !isSlapen;
+    if (isSlapen) {
+        scene.background = new THREE.Color(0x050520);
+        sleepAudio.play();
+    } else {
+        scene.background = new THREE.Color(0x87CEEB);
+        sleepAudio.pause();
+    }
+    UpdateStats();
+};
+
+
+function animate() {
+    requestAnimationFrame(animate);
+    
+    if (tamagotchi) {
+        if (isDansen) {
+            
+            tamagotchi.rotation.y += 0.2;
+            tamagotchi.position.y = Math.abs(Math.sin(Date.now() * 0.01)) * 0.5;
+        } else if (isSlapen) {
+            tamagotchi.rotation.z = Math.PI / 2; 
+            tamagotchi.position.y = -0.5;
+        } else {
+            
+            tamagotchi.rotation.z = 0;
+            
+            
+            
+            tamagotchi.position.y = Math.sin(Date.now() * 0.002) * 0.1;
+        }
+    }
+    
+    controls.update();
+    renderer.render(scene, camera);
+}
+
+animate();
+
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+let Emoties = ['IM HUNGRY GIMME SOME ROCKETS!', 'I NEED TO SLEEP BLYAT!', 'I NEED TO DANCE TO PUTIN SPECIAL OPERATION!'];
+let Message = ['THANK YOU BIDEN!!', 'Zzz......Donestk', 'DANCE DANCE DANCE!'];
+</script>
+
+</body>
+</html>
